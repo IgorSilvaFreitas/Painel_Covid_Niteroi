@@ -1,0 +1,999 @@
+---
+title: "Panorama Niterói Covid-19"
+output: 
+  flexdashboard::flex_dashboard:
+    vertical_layout: fill
+---
+
+```{r setup, include=FALSE}
+{library(flexdashboard)
+library(shiny)
+library(tidyverse)
+library(ggimage)
+library(gganimate)
+library(png)
+library(RCurl)
+library(lubridate)
+library(tmap)
+#devtools::install_github("rpradosiqueira/brazilmaps")
+library(brazilmaps)
+library(readxl)
+library(gridExtra)
+library(ggrepel)
+library(scales)
+library(stringr)
+library(ggthemes)
+library(transformr)
+library(gifski)
+library(RColorBrewer)
+library(grid)
+library(viridis)
+library(hrbrthemes)
+#devtools::install_github("fndemarqui/readCovid19")
+library(readCovid19)
+library(pracma)
+library(stringi)
+library(ggsn)
+library(magick)
+library(cowplot)
+library(plotly)
+library(sidrar)}
+
+##Para baixar dados .gz
+con <- gzcon(url(paste("https://github.com/wcota/covid19br/blob/master/cases-brazil-cities-time.csv.gz?raw=true","aa_combined-20110321.csv.gz", sep="")))
+dat <- read_csv(con)
+dados <- filter(dat, city=="Niterói/RJ")
+
+#########################################################################################
+#Metodo2, ele baixa no tempfile
+
+temp <- tempfile()
+
+download.file(url = "https://transparencia.niteroi.rj.gov.br/api/files/outras_informacoes/Vacina%C3%A7%C3%A3o%20Covid-19/consolidado%20doses%20covid.xlsx", 
+              destfile = temp, mode="wb")
+
+dados2 <- read_excel(temp)
+dados2 <- dados2[-c(1:8),] 
+
+dados2 = dados2 |> 
+  select(c(1,3,4)) |> 
+  rename(date=...1, Dose='Campanha de Vacinação contra COVID-19',
+         TOTAL=...4) 
+
+dados2$date= as.numeric(dados2$date)
+# primeiros dados em 20/01/2021
+dados2$date= as.Date.numeric(dados2$date, origin="1899-12-30")
+dados2$TOTAL= as.numeric(dados2$TOTAL)
+
+for (i in 2:length(dados2$date)){
+  if ((i-1)%%4!=0) dados2$date[i]=dados2$date[i-1]
+}
+
+#spread
+dados2_reorg = na.omit(dados2) |> 
+  spread(key = Dose,
+         value = TOTAL)
+
+niteroi= dados |> 
+  left_join(dados2_reorg, by="date")  
+
+
+#Metodo2, ele baixa no tempfile
+temp <- tempfile()
+
+data_sis <- Sys.Date()-2
+
+download.file(url = paste0("https://s3-sa-east-1.amazonaws.com/ckan.saude.gov.br/Leitos/",data_sis,"/esus-vepi.LeitoOcupacao.csv"),
+              destfile = temp)
+
+leitos <- read_csv(temp)
+leitos <- filter(leitos, municipio=="Niterói")
+leitos <- select(leitos, dataNotificacao, ocupacaoConfirmadoCli, ocupacaoConfirmadoUti)
+leitos <- mutate(leitos, dataNotificacao= format(dataNotificacao,"%Y-%m-%d"))
+leitos$dataNotificacao= ymd(leitos$dataNotificacao)
+leitos <- leitos |> 
+  group_by(dataNotificacao) |> 
+  summarise(ocupacaoConfirmadoCli= sum(ocupacaoConfirmadoCli),
+            ocupacaoConfirmadoUti= sum(ocupacaoConfirmadoUti)) |> 
+  rename(date= dataNotificacao)
+
+niteroi= niteroi |> 
+  left_join(leitos, by="date")  
+
+#pop dos municipios do RJ 2021 (na coluna Valor)
+municipios = get_sidra(api="/t/6579/n6/3300605,3302205,3302304,3303104,3304102,3300902,3303005,3304706,3301009,3301405,3302403,3304805,3305000,3301108,3301207,3301603,3302106,3305703,3303708,3305406,3306008,3300506,3301504,3304607,3305307,3305901,3300308,3300407,3304201,3304508,3306107,3306305,3303401,3303906,3305802,3301801,3302809,3302908,3304003,3304409,3306206,3300803,3301306,3304300,3305604,3301702,3301900,3302007,3302502,3302601,3302700,3303203,3303302,3303500,3303609,3304904,3305109,3300209,3300704,3305208,3305505,3300100,3303807,3304557,3302056,3304151,3302254,3305158,3303856,3300258,3300233,3300936,3301876,3302452,3303955,3304110,3304755,3305133,3305554,3305752,3300159,3300225,3300456,3300951,3301157,3301850,3302270,3304128,3304144,3304524,3306156,3302858/v/all/p/last%201")
+municipios = municipios |> 
+  rename(ibgeID= 'Município (Código)', populacao= Valor) |> 
+  arrange(ibgeID) |> 
+  select(ibgeID, populacao)
+
+#casosNit_final = BaseFinalRJ
+casosNit_final = niteroi
+
+
+#table(casosNit_final$Municipios)
+casosNit_final <- casosNit_final |> dplyr::filter(ibgeID!=33)
+municipios |> dplyr::rename(ibeID=populacao)
+municipios$ibgeID <- as.numeric(municipios$ibgeID)
+casosNit_final <- left_join(casosNit_final, municipios, by="ibgeID")
+
+aux_semana <- casosNit_final |> 
+  dplyr::distinct(epi_week)
+
+aux_nome <- casosNit_final |> 
+  dplyr::distinct(city)
+
+casosNit_final$date <- ymd(casosNit_final$date)
+aux_data = casosNit_final |> 
+  distinct(date)
+
+MM_casos = matrix(NA, dim(aux_nome)[1], nrow = length(aux_data$date))
+MM_obitos = matrix(NA, ncol = dim(aux_nome)[1], nrow = length(aux_data$date))
+MM_ocup_Cli = matrix(NA, ncol=dim(aux_nome)[1], nrow = length(aux_data$date))
+MM_ocup_Uti = matrix(NA, ncol=dim(aux_nome)[1], nrow = length(aux_data$date))
+
+
+j = 1
+for(i in aux_nome$city){
+  base_aux = casosNit_final  |>
+    filter(city == i) |> 
+    arrange(date) |>
+    distinct(city, date, .keep_all = T)
+  l = as.numeric(difftime(base_aux$date[1], as.Date("2020-03-12", units="days"))+1)
+  d = as.numeric(as.numeric(difftime(max(base_aux$date), as.Date("2020-03-12", units="days"))+1))
+  
+  MM_casos[l:d,j] = movavg(base_aux$newCases, n = 7,type = "s")
+  
+  MM_obitos[l:d,j] = movavg(base_aux$newDeaths, n = 7,type = "s")
+  
+  MM_ocup_Cli[l:d,j] = movavg(base_aux$ocupacaoConfirmadoCli, n=7, type="s")
+  
+  MM_ocup_Uti[l:d,j] = movavg(base_aux$ocupacaoConfirmadoUti, n=7, type="s")
+  
+  j = j+1
+}
+
+colnames(MM_casos) = aux_nome$city
+colnames(MM_obitos) = aux_nome$city
+colnames(MM_ocup_Cli) = aux_nome$city
+colnames(MM_ocup_Uti) = aux_nome$city
+
+#Criando a base empilhada de casos
+MM_aux_casos = as_tibble(MM_casos)
+MM_aux_casos$date = aux_data$date
+MM_aux_geral_casos = gather(MM_aux_casos, key = "city", value = "MM_casos", -date)
+
+#Criando a base empilhada dos obitos
+MM_aux_obitos = as_tibble(MM_obitos)
+MM_aux_obitos$date = aux_data$date
+MM_aux_geral_obitos = gather(MM_aux_obitos, key = "city", value = "MM_obitos", -date)
+
+#Criando a base empilhada dos leitos clinicos ocupados
+MM_aux_ocup_Cli <- as_tibble(MM_ocup_Cli)
+MM_aux_ocup_Cli$date <- aux_data$date
+MM_aux_geral_ocup_Cli <- gather(MM_aux_ocup_Cli, key = "city", value = "MM_ocup_Cli", -date)
+
+#Criando a base empilhada dos leitos de UTI ocupados
+MM_aux_ocup_Uti <- as_tibble(MM_ocup_Uti)
+MM_aux_ocup_Uti$date <- aux_data$date
+MM_aux_geral_ocup_Uti <- gather(MM_aux_ocup_Uti, key = "city", value = "MM_ocup_Uti", -date)
+
+casosNit_final = left_join(casosNit_final,MM_aux_geral_casos, by = c("date", "city"))
+
+casosNit_final = left_join(casosNit_final,MM_aux_geral_obitos, by = c("date", "city"))
+
+casosNit_final = left_join(casosNit_final,MM_aux_geral_ocup_Cli, by = c("date", "city"))
+
+casosNit_final = left_join(casosNit_final,MM_aux_geral_ocup_Uti, by = c("date", "city"))
+
+###########################################################################################
+#SRAG20
+#Mudar a data todas as segundas
+temp <- tempfile()
+
+data_sis <- format(Sys.Date()-7, "%d-%m-%Y")
+
+download.file(url = "https://s3-sa-east-1.amazonaws.com/ckan.saude.gov.br/SRAG/2020/INFLUD-11-10-2021.csv",
+              destfile = temp)
+
+srag20 <- readr::read_csv2(temp)
+#save(srag20, file="srag20.rdata")
+
+#idade
+for (i in 1:length(srag20$NU_IDADE_N)){
+  if(srag20$TP_IDADE[i]!=3) srag20$NU_IDADE_N[i]=0
+}
+
+srag20$DT_INTERNA= as.Date.character(srag20$DT_INTERNA, tryFormats= "%d/%m/%Y")
+srag20$DT_ENTUTI= as.Date.character(srag20$DT_ENTUTI, tryFormats= "%d/%m/%Y")
+srag20$DT_SAIDUTI= as.Date.character(srag20$DT_SAIDUTI, tryFormats= "%d/%m/%Y")
+srag20$DT_EVOLUCA= as.Date.character(srag20$DT_EVOLUCA, tryFormats= "%d/%m/%Y")
+
+##################################################################################################
+#SRAG21
+#Mudar a data todas as segundas
+temp <- tempfile()
+
+data_sis <- format(Sys.Date()-7, "%d-%m-%Y")
+
+download.file(url = "https://s3-sa-east-1.amazonaws.com/ckan.saude.gov.br/SRAG/2021/INFLUD21-11-10-2021.csv",
+              destfile = temp)
+
+srag21 <- readr::read_csv2(temp)
+#save(srag21, file="srag21.rdata")
+
+#idade
+for (i in 1:length(srag21$NU_IDADE_N)){
+  if(srag21$TP_IDADE[i]!=3) srag21$NU_IDADE_N[i]=0
+}
+
+srag21$DT_INTERNA= as.Date.character(srag21$DT_INTERNA, tryFormats= "%d/%m/%Y")
+srag21$DT_ENTUTI= as.Date.character(srag21$DT_ENTUTI, tryFormats= "%d/%m/%Y")
+srag21$DT_SAIDUTI= as.Date.character(srag21$DT_SAIDUTI, tryFormats= "%d/%m/%Y")
+srag21$DT_EVOLUCA= as.Date.character(srag21$DT_EVOLUCA, tryFormats= "%d/%m/%Y")
+
+########################################################################################
+srag20 = srag20 |> 
+  select(NU_IDADE_N, CLASSI_FIN, DT_INTERNA, ID_MN_INTE, UTI:DT_SAIDUTI, DT_EVOLUCA) |> 
+  filter(CLASSI_FIN==5, ID_MN_INTE== "NITEROI") |> 
+  select(-c(CLASSI_FIN, ID_MN_INTE)) |> 
+  rename(IDADE= NU_IDADE_N) |> 
+  mutate(ANO= year(DT_INTERNA)) |> 
+  filter(ANO== 2020 | ANO== 2021) |> 
+  arrange(DT_INTERNA)
+
+srag21 = srag21 |> 
+  select(NU_IDADE_N, CLASSI_FIN, DT_INTERNA, ID_MN_INTE, UTI:DT_SAIDUTI, DT_EVOLUCA) |> 
+  filter(CLASSI_FIN==5, ID_MN_INTE== "NITEROI") |> 
+  select(-c(CLASSI_FIN, ID_MN_INTE)) |> 
+  rename(IDADE= NU_IDADE_N) |> 
+  mutate(ANO= year(DT_INTERNA)) |> 
+  filter(ANO== 2020 | ANO== 2021) |> 
+  arrange(DT_INTERNA)
+
+srag = bind_rows(srag20, srag21)
+
+srag$FAIXA= cut(srag$IDADE, breaks= c(-Inf, 1, 6, 20, 30, 40, 50, 60, 70, 80, 90, Inf), right= F)
+srag <- srag |> 
+  mutate(FAIXA = factor(FAIXA, labels = c("<1","1 a 5","6 a 19","20 a 29","30 a 39","40 a 49",
+                                          "50 a 59","60 a 69","70 a 79","80 a 89","90 ou mais")))
+########################################################################################
+
+image = image_fill(image_read("logo_get_uff_covid.png"),"none")
+raster = as.raster(image)
+image2 = image_fill(image_read("doses.png"),"none")
+doses = as.raster(image2)
+doses2 = readPNG("doses2.png")
+leitos = readPNG("leitos.png")
+```
+
+Resumos diários Covid-19
+=======================================================================
+
+column {data-width=500, .tabset}
+-----------------------------------------------------------------------
+
+### Casos diários
+
+```{r}
+casosNit_final$`Média móvel` <- round(casosNit_final$MM_casos,0)
+casosNit_final$`Casos novos` <- casosNit_final$newCases
+
+g1 <- casosNit_final |> ggplot(aes(x=date, y=`Casos novos`))+ 
+  geom_bar(stat="identity",
+           fill="orange")+
+  geom_line(aes(y=`Média móvel`),
+            col="blue")+
+  scale_x_date(date_breaks = "2 month",
+               date_labels = "%b/%y")+
+  scale_y_continuous(label = scales::label_number(big.mark = ".",
+                                                  decimal.mark = ",")) +
+  labs(title="Casos diários", y= "Casos Novos", x="data")+
+  theme_tufte()+
+  theme(plot.title = element_text(hjust = 0.5, size=12, face="bold"),
+        text = element_text(size=15))
+  
+
+ggplotly(g1) |> 
+   layout(images = list(
+     list(source = raster2uri(raster),
+          xref = "container",
+          yref = "container",
+          x = 0.1,
+          y = 1,
+          sizex = 0.15,
+          sizey = 0.15,
+          opacity = 1.6)
+   ))
+
+```
+
+### Óbitos diários
+
+```{r}
+casosNit_final$`Média móvel` <- round(casosNit_final$MM_obitos,0)
+casosNit_final$`Óbitos novos` <- casosNit_final$newDeaths
+
+g2 <- casosNit_final |> ggplot(aes(x=date, y=`Óbitos novos`))+ 
+  geom_bar(stat="identity",
+           fill="orange")+
+  geom_line(aes(y=`Média móvel`),
+            col="blue")+
+  scale_x_date(date_breaks = "2 month",
+               date_labels = "%b/%y")+
+    scale_y_continuous(label = scales::label_number(big.mark = ".",
+                                                  decimal.mark = ",")) +
+  labs(title="Óbitos diários", y= "Óbitos Novos", x="data")+
+  theme_tufte()+
+  theme(plot.title = element_text(hjust = 0.5, size=12, face="bold"),
+        text = element_text(size=15))
+  
+
+ggplotly(g2) |> 
+   layout(images = list(
+     list(source = raster2uri(raster),
+          xref = "container",
+          yref = "container",
+          x = 0.1,
+          y = 1,
+          sizex = 0.15,
+          sizey = 0.15,
+          opacity = 1.6)
+   ))
+
+```
+
+### Ocupação diária de leitos clínicos
+
+```{r}
+casosNit_final$`Leitos clínicos ocupados` <- casosNit_final$ocupacaoConfirmadoCli
+casosNit_final$`média móvel` <- casosNit_final$MM_ocup_Cli
+
+g7 <- casosNit_final |> ggplot(aes(x=date, y=`Leitos clínicos ocupados`))+ 
+  geom_bar(stat="identity",
+           fill="white",
+           col="orange")+
+  geom_line(aes(y=`média móvel`),
+            col="blue")+
+  scale_x_date(date_breaks = "2 month",
+               date_labels = "%b/%y")+
+  labs(title="Ocupação diária de leitos clínicos", y= "Leitos clínicos ocupados", x="data")+
+  theme_tufte()+
+  theme(plot.title = element_text(hjust = 0.5, size=12, face="bold"),
+        text = element_text(size=15))
+  
+
+ggplotly(g7) |> 
+   layout(images = list(
+     list(source = raster2uri(raster),
+          xref = "container",
+          yref = "container",
+          x = 0.1,
+          y = 1,
+          sizex = 0.15,
+          sizey = 0.15,
+          opacity = 1.6)
+   ))
+
+```
+
+### Ocupação diária de leitos de UTI
+
+```{r}
+casosNit_final$`Leitos UTI ocupados` <- casosNit_final$ocupacaoConfirmadoUti
+casosNit_final$`média móvel` <- casosNit_final$MM_ocup_Uti
+
+g8 <- casosNit_final |> ggplot(aes(x=date, y=`Leitos UTI ocupados`))+
+   geom_bar(stat="identity",
+           fill="orange",
+           col="orange")+
+  geom_line(aes(y=`média móvel`),
+            col="blue")+
+  scale_x_date(date_breaks = "2 month",
+               date_labels = "%b/%y")+
+  labs(title="Ocupação diária de leitos de UTI", y= "Leitos de UTI ocupados", x="data")+
+  theme_tufte()+
+  theme(plot.title = element_text(hjust = 0.5, size=12, face="bold"),
+        text = element_text(size=15))
+  
+
+ggplotly(g8) |> 
+   layout(images = list(
+     list(source = raster2uri(raster),
+          xref = "container",
+          yref = "container",
+          x = 0.1,
+          y = 1,
+          sizex = 0.15,
+          sizey = 0.15,
+          opacity = 1.6)
+   ))
+```
+
+
+column {data-width=500, .tabset}
+-----------------------------------------------------------------------
+
+### Vacinação diária
+
+```{r}
+casosNit_final$`Primeira dose` <- casosNit_final$D1
+casosNit_final$`Segunda dose ou dose única` <- casosNit_final$D2 + casosNit_final$DU
+
+g3 <- casosNit_final |> ggplot(aes(x=date, y=`Primeira dose`))+ 
+  geom_bar(stat="identity",
+           fill="orange")+
+  geom_bar(mapping= aes(y=`Segunda dose ou dose única`),
+           stat="identity",
+           fill="red", alpha= 0.6)+
+  scale_x_date(date_breaks = "month",
+               date_labels = "%b/%y")+
+  scale_y_continuous(label = scales::label_number(big.mark = ".",
+                                                  decimal.mark = ",")) +
+  #ylim(c(0,7000)) +
+  labs(title="Aplicação diária de Vacinas", y= "Vacinas",
+       x= "data",
+       color = NULL) + theme_tufte()+
+  theme(plot.title = element_text(hjust = 0.5, size=12, face="bold"),
+        text = element_text(size=15))
+
+ggplotly(g3) |> 
+   layout(images = list(
+     list(source = raster2uri(raster),
+          xref = "container",
+          yref = "container",
+          x = 0.1,
+          y = 1,
+          sizex = 0.15,
+          sizey = 0.15,
+          opacity = 1.6), 
+     list(source = raster2uri(doses),
+          xref = "container",
+          yref = "container",
+          x = 0.02,
+          y = 0.75,
+          sizex = 0.25,
+          sizey = 0.25,
+          opacity = 1.6)))
+```
+
+### Vacinação diária da 1ª dose
+
+```{r}
+casosNit_final$`Vacinas aplicadas` <- casosNit_final$D1
+
+g4 <- casosNit_final |> ggplot(aes(x=date, y=`Vacinas aplicadas`))+ 
+  geom_bar(stat="identity",
+           fill="orange")+
+  scale_x_date(date_breaks = "month",
+               date_labels = "%b/%y")+
+  scale_y_continuous(label = scales::label_number(big.mark = ".",
+                                                  decimal.mark = ",")) +
+  labs(title="Aplicação diária de Vacinas de 1ª Dose", y= "Vacina de 1ª Dose",
+       x= "data")+ 
+  theme_tufte()+
+  theme(plot.title = element_text(hjust = 0.5, size=12, face="bold"),
+        text = element_text(size=15))
+  
+
+ggplotly(g4) |> 
+   layout(images = list(
+     list(source = raster2uri(raster),
+          xref = "container",
+          yref = "container",
+          x = 0.1,
+          y = 1,
+          sizex = 0.15,
+          sizey = 0.15,
+          opacity = 1.6)
+   ))
+
+```
+
+### Vacinação diária da 2ª dose ou Dose Única
+
+```{r}
+casosNit_final$`Vacinas aplicadas` <- casosNit_final$D2 + casosNit_final$DU
+
+g5 <- casosNit_final |> ggplot(aes(x=date, y=`Vacinas aplicadas`))+ 
+  geom_bar(stat="identity",
+           fill="red")+
+  scale_x_date(date_breaks = "month",
+               date_labels = "%b/%y")+
+  scale_y_continuous(label = scales::label_number(big.mark = ".",
+                                                  decimal.mark = ",")) +
+  labs(title="Aplicação diária de Vacinas de 2ª Dose ou Dose Única", y= "Vacina de 2ª Dose ou Dose Única",
+       x= "data")+ 
+  theme_tufte()+
+  theme(plot.title = element_text(hjust = 0.5, size=12, face="bold"),
+        text = element_text(size=15))
+  
+
+ggplotly(g5) |> 
+   layout(images = list(
+     list(source = raster2uri(raster),
+          xref = "container",
+          yref = "container",
+          x = 0.1,
+          y = 1,
+          sizex = 0.15,
+          sizey = 0.15,
+          opacity = 1.6)
+   ))
+```
+
+
+### Vacinação diária da 3° dose
+
+```{r}
+casosNit_final$`Vacinas aplicadas` <- casosNit_final$D3
+
+g11 <- casosNit_final |> ggplot(aes(x=date, y=`Vacinas aplicadas`))+ 
+  geom_bar(stat="identity",
+           fill="red")+
+  scale_x_date(date_breaks = "month",
+               date_labels = "%b/%y")+
+  scale_y_continuous(label = scales::label_number(big.mark = ".",
+                                                  decimal.mark = ",")) +
+  labs(title="Aplicação diária de Vacinas de 3ª Dose ou Dose Única", y= "Vacina de 3ª Dose ou Dose Única",
+       x= "data")+ 
+  theme_tufte()+
+  theme(plot.title = element_text(hjust = 0.5, size=12, face="bold"),
+        text = element_text(size=15))
+
+ggplotly(g11) |>
+  layout(images = list(
+    list(source = raster2uri(raster),
+         xref = "container",
+         yref = "container",
+         x = 0.7,
+         y = 0.9,
+         sizex = 0.25,
+         sizey = 0.25,
+         opacity = 1.6)
+  ))
+
+```
+
+
+Ocupações de Leitos- SRAG por COVID-19
+==================================================================
+
+column {data-width=500}
+------------------------------------------------------------------
+
+### Leitos clínicos
+
+```{r}
+srag_cli = srag |>
+  filter(UTI== 2) |> 
+  group_by(FAIXA, ANO) |> 
+  summarise(OCUPACOES = n())  |> 
+  ungroup()
+
+srag_cli = srag_cli |> 
+  mutate(prop_OCUPACOES = round(OCUPACOES / sum(OCUPACOES) * 100,2),
+         prop_OCUPACOES =  ifelse(ANO == 2020, -prop_OCUPACOES, prop_OCUPACOES),
+         OCUPACOES = ifelse(ANO == 2020, -OCUPACOES, OCUPACOES),
+         sinal = ifelse(ANO == 2020, -1, 1))
+
+
+g9 =  ggplot(srag_cli) + 
+  geom_bar(aes(x = FAIXA, y = prop_OCUPACOES, fill = as.factor(ANO), 
+               text = paste("Ocupações: ", abs(OCUPACOES), sep = "")), stat = "identity") + 
+  geom_text(size = 2.5,aes(x = FAIXA, y = prop_OCUPACOES + sinal * 2.5 , label = paste(abs(prop_OCUPACOES),"%", sep = ''))) + 
+  coord_flip() + 
+  scale_fill_manual(name = "", values = c("darkred", "steelblue")) +
+  labs(x = "", y = "Ocupações de SRAG por COVID-19 Confirmados (%)", fill= "Ano", title= "Leitos Clínicos") + 
+  theme_light()
+
+ggplotly(g9, tooltip = "text") |> 
+   layout(images = list(
+     list(source = raster2uri(raster),
+          xref = "container",
+          yref = "container",
+          x = 0.8,
+          y = 0.96,
+          sizex = 0.15,
+          sizey = 0.15,
+          opacity = 1.6)
+   ))
+
+```
+
+column {data-width=500}
+------------------------------------------------------------------
+
+### Leitos de UTI
+
+```{r}
+srag_uti = srag |>
+  filter(UTI== 1) |> 
+  group_by(FAIXA, ANO) |> 
+  summarise(OCUPACOES = n())  |> 
+  ungroup()
+
+srag_uti = srag_uti |> 
+  mutate(prop_OCUPACOES = round(OCUPACOES / sum(OCUPACOES) * 100,2),
+         prop_OCUPACOES =  ifelse(ANO == 2020, -prop_OCUPACOES, prop_OCUPACOES),
+         OCUPACOES = ifelse(ANO == 2020, -OCUPACOES, OCUPACOES),
+         sinal = ifelse(ANO == 2020, -1, 1))
+
+
+image = image_fill(image_read("logo_get_uff_covid.png"),"none")
+raster = as.raster(image)
+
+g10 =  ggplot(srag_uti) + 
+  geom_bar(aes(x = FAIXA, y = prop_OCUPACOES, fill = as.factor(ANO), 
+               text = paste("Ocupações: ", abs(OCUPACOES), sep = "")), stat = "identity") + 
+  geom_text(size = 2.5,aes(x = FAIXA, y = prop_OCUPACOES + sinal * 2.5 , label = paste(abs(prop_OCUPACOES),"%", sep = ''))) + 
+  coord_flip() + 
+  scale_fill_manual(name = "", values = c("darkred", "steelblue")) +
+  labs(x = "", y = "Ocupações de SRAG por COVID-19 Confirmados (%)", fill= "Ano", title= "Leitos de UTI") + 
+  theme_light()
+
+ggplotly(g10, tooltip = "text") |> 
+  layout(images = list(
+    list(source = raster2uri(raster),
+         xref = "container",
+         yref = "container",
+         x = 0.8,
+         y = 0.96,
+         sizex = 0.15,
+         sizey = 0.15,
+         opacity = 1.6)
+  ))
+ 
+```
+
+Vacinas Covid-19
+=======================================================================
+  
+column {data-width=500, .tabset}
+-----------------------------------------------------------------------
+
+### Primeira dose
+  
+```{r fig.align='center', echo=FALSE, message=FALSE, warning=FALSE, fig.width = 10}
+#Acumulado das vacinas aplicadas
+casosNit_final2= casosNit_final
+casosNit_final2$D1= as.character(casosNit_final2$D1)
+for (i in 1:length(casosNit_final2$D1)){
+  if(is.na(casosNit_final2$D1[i]==T)) casosNit_final2$D1[i]="Nao informado"
+}
+casosNit_final2= dplyr::filter(casosNit_final2, D1!="Nao informado")
+casosNit_final2$D1= as.numeric(casosNit_final2$D1)
+
+casosNit_final2$D1_AC= cumsum(casosNit_final2$D1)
+casosNit_final2$D2_AC= cumsum(casosNit_final2$D2+casosNit_final2$DU)
+casosNit_final2$D3_AC= cumsum(casosNit_final2$D3)
+
+casosNit_final2$D2_AC= as.character(casosNit_final2$D2_AC)
+for (i in 1:length(casosNit_final2$D2_AC)){
+  if((casosNit_final2$date[i]<"2021-02-10")) casosNit_final2$D2_AC[i]=NA
+}
+casosNit_final2$D2_AC= as.numeric(casosNit_final2$D2_AC)
+
+casosNit_final2$D3_AC= as.character(casosNit_final2$D3_AC)
+for (i in 1:length(casosNit_final2$D3_AC)){
+  if((casosNit_final2$date[i]<"2021-08-27")) casosNit_final2$D3_AC[i]=NA
+}
+casosNit_final2$D3_AC= as.numeric(casosNit_final2$D3_AC)
+
+
+Nit_map <- get_brmap(geo = "City",
+                     geo.filter = list(State = 33),
+                     class = "sf")
+Nit_map = filter(Nit_map,nome=="NITERÓI")
+
+BaseNit_aux = casosNit_final2
+BaseNit_aux$city = sub(pattern = "/RJ", replacement = "", x = BaseNit_aux$city)
+BaseNit_aux$city = str_to_upper(BaseNit_aux$city)
+#aux_inconsistencia = str_to_upper(aux_inconsistencia)
+Nit = left_join(Nit_map, BaseNit_aux, by = c("nome" = "city"))
+names(Nit)[1] = "city"
+
+
+# Criando AS TAXAS
+Nit = Nit |> 
+  filter(date== max(date)) |> 
+  mutate(taxaD1= round(D1_AC/populacao, 2),
+         taxaD2= round(D2_AC/populacao, 2),
+         taxaD3= round(D3_AC/populacao, 2),
+         rotulo= str_c(city, " - ", paste0(round(taxaD1,2)*100, "%")))
+
+
+
+
+gauge(Nit$taxaD1*100, min = 0, max = 100,
+      sectors = gaugeSectors(success=c(80,100),warning = c(40,80),danger = c(0,40),
+                             colors = c("Red","Red","Red")),
+      symbol = "%")
+```
+
+
+### Segunda dose
+
+```{r}
+gauge(Nit$taxaD2*100, min = 0, max = 100,
+      sectors = gaugeSectors(success=c(80,100),warning = c(40,80),danger = c(0,40),
+                             colors = c("Blue","Blue","Blue")),
+      symbol = "%")
+```
+
+### Terceira dose
+
+```{r}
+gauge(Nit$taxaD3*100, min = 0, max = 100,
+      sectors = gaugeSectors(success=c(80,100),warning = c(40,80),danger = c(0,40),
+                             colors = c("Green","Green","Green")),
+      symbol = "%")
+```
+
+column {data-width=1400}
+------------------------------------------------------------------
+
+### Vacinação acumulada por tipo de dose
+
+```{r }
+casosNit_final2$`Aplicações primeira dose` <- casosNit_final2$D1_AC
+casosNit_final2$`Aplicações segunda dose ou dose única` <- casosNit_final2$D2_AC
+casosNit_final2$`Aplicações terceira dose` <- casosNit_final2$D3_AC
+
+g6 <- casosNit_final2 |> 
+  ggplot(aes(x=date, y=`Aplicações primeira dose`, fill = "Primeira dose"))+ 
+  geom_line(col= "red")+
+  geom_line(aes(y= `Aplicações segunda dose ou dose única`, fill = "Segunda dose ou dose única"),
+            col="blue")+
+  geom_line(aes(y= `Aplicações terceira dose`, fill = "Terceira dose"),
+            col="green")+
+  scale_x_date(date_breaks = "month",
+               date_labels = "%b/%y")+
+  scale_y_continuous(label = scales::label_number(big.mark = ".",
+                                                  decimal.mark = ",")) +
+  labs(title= "Acumulado de vacinas aplicadas por tipo de dose",
+       x= "data",
+       y="Vacinas Aplicadas",
+       color = NULL) + theme_tufte() +
+  theme(legend.position = "top", plot.title = element_text(hjust = 0.5, size=12, face="bold"),
+        text = element_text(size=15))
+
+ggplotly(g6) |> 
+   layout(images = list(
+     list(source = raster2uri(raster),
+          xref = "container",
+          yref = "container",
+          x = 0.1,
+          y = 1,
+          sizex = 0.15,
+          sizey = 0.15,
+          opacity = 1.6)))
+
+
+
+```
+
+Mapas
+=======================================================================
+
+column {data-width=500, .tabset}
+-----------------------------------------------------------------------
+
+### Mapa da proporção da população vacinada com a 1° dose
+
+```{r fig.align='center', echo=FALSE, message=FALSE, warning=FALSE, fig.width = 10}
+#Mapa Primeira Dose
+
+#Definindo o tipo do mapa como interativo
+tmap_mode("view")
+
+for (i in 1:length(Nit$taxaD1)){
+  if (is.na(Nit$taxaD1[i])==T) Nit$taxaD1[i]= "VALOR FALTANTE"
+}
+
+Nit$situacao= NA
+
+for (i in 1:length(Nit$taxaD1)){
+  if(is.na(Nit$taxaD1[i])==T) 
+    Nit$situacao[i] = "A"
+  else{
+    if((Nit$taxaD1[i])< 0.25)
+      Nit$situacao[i] = "B"
+    else{
+      if((Nit$taxaD1[i])< 0.5)
+        Nit$situacao[i] = "C"
+      else{
+        if((Nit$taxaD1[i])< 0.75)
+          Nit$situacao[i] = "D"
+        else{Nit$situacao[i] = "E"}
+      }
+    }  
+  }
+}
+
+Nit$situacao = ordered(Nit$situacao, 
+                       levels = c("A",  "B",  "C",  "D", "E"), 
+                       labels = c("Dados Inconsistentes",
+                                  "0-25", 
+                                  "25-50", 
+                                  "50-75", 
+                                  "75-100"))
+
+red = brewer.pal(9,"Reds")
+gre = brewer.pal(9,"Greens")
+yel = brewer.pal(9,"YlOrBr")
+blu = brewer.pal(9,"Blues")
+
+tm_shape(Nit) + 
+  tm_polygons("situacao",
+              border.col = "white",
+              title = "Taxa de pessoas vacinadas com a 1ª dose da vacina da COVID em Niterói (%)",
+              id = "rotulo",
+              popup.vars=c("Taxa 1ª Dose:" = "taxaD1",
+                           "Taxa 2ª Dose/ Dose Única:" = "taxaD2",
+                           "Taxa 3ª Dose (Reforço):" = "taxaD3"), 
+              popup.format=list(taxaD1=list(digits=2)),
+              palette = c("gray",red[3],red[5],red[7],red[9]),
+              textNA = "Valor Faltante",
+              set.view = 6, legend.show = T)  +
+  tm_view(alpha = 1, view.legend.position = c("left","bottom")) +
+  tm_add_legend(labels = "Clique em um município para mais informações!", col = "white")
+
+```
+
+### Mapa da proporção da população vacinada com a 2° dose ou dose única
+
+```{r fig.align='center', echo=FALSE, message=FALSE, warning=FALSE, fig.width = 10}
+#Mapa Segunda Dose/ Dose Única
+Nit_map <- get_brmap(geo = "City",
+                     geo.filter = list(State = 33),
+                     class = "sf")
+Nit_map = filter(Nit_map,nome=="NITERÓI")
+
+BaseNit_aux = casosNit_final2
+BaseNit_aux$city = sub(pattern = "/RJ", replacement = "", x = BaseNit_aux$city)
+BaseNit_aux$city = str_to_upper(BaseNit_aux$city)
+#aux_inconsistencia = str_to_upper(aux_inconsistencia)
+Nit = left_join(Nit_map, BaseNit_aux, by = c("nome" = "city"))
+names(Nit)[1] = "city"
+
+#Definindo o tipo do mapa como interativo
+tmap_mode("view")
+
+# Criando o mapa
+Nit = Nit |> 
+  filter(date== max(date)) |> 
+  mutate(taxaD1= round(D1_AC/populacao, 2),
+         taxaD2= round(D2_AC/populacao, 2),
+         taxaD3= round(D3_AC/populacao, 2),
+         rotulo= str_c(city, " - ", paste0(round(taxaD2,2)*100, "%")))
+
+
+for (i in 1:length(Nit$taxaD2)){
+  if (is.na(Nit$taxaD2[i])==T) Nit$taxaD2[i]= "VALOR FALTANTE"
+}
+
+Nit$situacao= NA
+
+for (i in 1:length(Nit$taxaD2)){
+  if(is.na(Nit$taxaD2[i])==T) 
+    Nit$situacao[i] = "A"
+  else{
+    if((Nit$taxaD2[i])< 0.25)
+      Nit$situacao[i] = "B"
+    else{
+      if((Nit$taxaD2[i])< 0.5)
+        Nit$situacao[i] = "C"
+      else{
+        if((Nit$taxaD2[i])< 0.75)
+          Nit$situacao[i] = "D"
+        else{Nit$situacao[i] = "E"}
+      }
+    }  
+  }
+}
+
+Nit$situacao = ordered(Nit$situacao, 
+                       levels = c("A",  "B",  "C",  "D", "E"), 
+                       labels = c("Dados Inconsistentes",
+                                  "0-25", 
+                                  "25-50", 
+                                  "50-75", 
+                                  "75-100"))
+
+
+tm_shape(Nit) + 
+  tm_polygons("situacao",
+              border.col = "white",
+              title = "Taxa de pessoas vacinadas com a 2ª dose ou Dose Única da vacina da COVID em Niterói (%)",
+              id = "rotulo",
+              popup.vars=c("Taxa 1ª Dose:" = "taxaD1",
+                           "Taxa 2ª Dose/ Dose Única:" = "taxaD2",
+                           "Taxa 3ª Dose (Reforço):" = "taxaD3"), 
+              popup.format=list(taxaD2=list(digits=2)),
+              palette = c("gray",blu[3],blu[5],blu[7],blu[9]),
+              textNA = "Valor Faltante",
+              set.view = 6, legend.show = T)  +
+  tm_view(alpha = 1, view.legend.position = c("left","bottom")) +
+  tm_add_legend(labels = "Clique em um município para mais informações!", col = "white")
+
+```
+
+### Mapa da proporção da população vacinada com a 3° dose
+
+```{r fig.align='center', echo=FALSE, message=FALSE, warning=FALSE, fig.width = 10}
+#Mapa Terceira Dose
+Nit_map <- get_brmap(geo = "City",
+                     geo.filter = list(State = 33),
+                     class = "sf")
+Nit_map = filter(Nit_map,nome=="NITERÓI")
+
+BaseNit_aux = casosNit_final2
+BaseNit_aux$city = sub(pattern = "/RJ", replacement = "", x = BaseNit_aux$city)
+BaseNit_aux$city = str_to_upper(BaseNit_aux$city)
+#aux_inconsistencia = str_to_upper(aux_inconsistencia)
+Nit = left_join(Nit_map, BaseNit_aux, by = c("nome" = "city"))
+names(Nit)[1] = "city"
+
+#Definindo o tipo do mapa como interativo
+tmap_mode("view")
+
+# Criando o mapa
+Nit = Nit |> 
+  filter(date== max(date)) |> 
+  mutate(taxaD1= round(D1_AC/populacao, 2),
+         taxaD2= round(D2_AC/populacao, 2),
+         taxaD3= round(D3_AC/populacao, 2),
+         rotulo= str_c(city, " - ", paste0(round(taxaD3,2)*100, "%")))
+
+
+for (i in 1:length(Nit$taxaD3)){
+  if (is.na(Nit$taxaD3[i])==T) Nit$taxaD3[i]= "VALOR FALTANTE"
+}
+
+Nit$situacao= NA
+
+for (i in 1:length(Nit$taxaD3)){
+  if(is.na(Nit$taxaD3[i])==T) 
+    Nit$situacao[i] = "A"
+  else{
+    if((Nit$taxaD3[i])< 0.25)
+      Nit$situacao[i] = "B"
+    else{
+      if((Nit$taxaD3[i])< 0.5)
+        Nit$situacao[i] = "C"
+      else{
+        if((Nit$taxaD3[i])< 0.75)
+          Nit$situacao[i] = "D"
+        else{Nit$situacao[i] = "E"}
+      }
+    }  
+  }
+}
+
+Nit$situacao = ordered(Nit$situacao, 
+                       levels = c("A",  "B",  "C",  "D", "E"), 
+                       labels = c("Dados Inconsistentes",
+                                  "0-25", 
+                                  "25-50", 
+                                  "50-75", 
+                                  "75-100"))
+
+
+
+tm_shape(Nit) + 
+  tm_polygons("situacao",
+              border.col = "white",
+              title = "Taxa de pessoas vacinadas com a 3ª dose (de Reforço) da vacina da COVID em Niterói (%)",
+              id = "rotulo",
+              popup.vars=c("Taxa 1ª Dose:" = "taxaD1",
+                           "Taxa 2ª Dose/ Dose Única:" = "taxaD2",
+                           "Taxa 3ª Dose (Reforço):" = "taxaD3"), 
+              popup.format=list(taxaD3=list(digits=2)),
+              palette = c("gray",gre[3],gre[5],gre[7],gre[9]),
+              textNA = "Valor Faltante",
+              set.view = 6, legend.show = T)  +
+  tm_view(alpha = 1, view.legend.position = c("left","bottom")) +
+  tm_add_legend(labels = "Clique em um município para mais informações!", col = "white")
+
+```

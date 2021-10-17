@@ -649,7 +649,7 @@ ggplotly(g10, tooltip = "text") |>
 Vacinas Covid-19
 =======================================================================
   
-column {data-width=500, .tabset}
+column {data-width=200}
 -----------------------------------------------------------------------
 
 ### Primeira dose
@@ -730,7 +730,7 @@ gauge(Nit$taxaD3*100, min = 0, max = 100,
       symbol = "%")
 ```
 
-column {data-width=1400}
+column {data-width=800}
 ------------------------------------------------------------------
 
 ### Vacinação acumulada por tipo de dose
@@ -776,7 +776,7 @@ ggplotly(g6) |>
 Mapas
 =======================================================================
 
-column {data-width=500, .tabset}
+column {data-width=1000, .tabset}
 -----------------------------------------------------------------------
 
 ### Mapa da proporção da população vacinada com a 1° dose

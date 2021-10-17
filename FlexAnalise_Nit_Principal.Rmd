@@ -264,7 +264,7 @@ raster = as.raster(image)
 image2 = image_fill(image_read("doses.png"),"none")
 doses = as.raster(image2)
 doses2 = readPNG("doses2.png")
-leitos = readPNG("leitos.png")
+
 ```
 
 Resumos diários Covid-19

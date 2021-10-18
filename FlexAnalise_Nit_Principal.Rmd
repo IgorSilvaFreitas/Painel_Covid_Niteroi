@@ -583,7 +583,9 @@ g9 =  ggplot(srag_cli) +
   coord_flip() + 
   scale_fill_manual(name = "", values = c("darkred", "steelblue")) +
   labs(x = "", y = "Ocupações de SRAG por COVID-19 Confirmados (%)", fill= "Ano", title= "Leitos Clínicos") + 
-  theme_light()
+  theme_light()+
+  theme(plot.title = element_text(hjust = 0.5, size=12, face="bold"),
+        text = element_text(size=15))
 
 ggplotly(g9, tooltip = "text") |> 
    layout(images = list(
@@ -628,7 +630,9 @@ g10 =  ggplot(srag_uti) +
   coord_flip() + 
   scale_fill_manual(name = "", values = c("darkred", "steelblue")) +
   labs(x = "", y = "Ocupações de SRAG por COVID-19 Confirmados (%)", fill= "Ano", title= "Leitos de UTI") + 
-  theme_light()
+  theme_light()+
+  theme(plot.title = element_text(hjust = 0.5, size=12, face="bold"),
+        text = element_text(size=15))
 
 ggplotly(g10, tooltip = "text") |> 
   layout(images = list(

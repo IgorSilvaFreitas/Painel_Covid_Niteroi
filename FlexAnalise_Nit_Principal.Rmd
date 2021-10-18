@@ -351,8 +351,7 @@ casosNit_final$`média móvel` <- casosNit_final$MM_ocup_Cli
 
 g7 <- casosNit_final |> ggplot(aes(x=date, y=`Leitos clínicos ocupados`))+ 
   geom_bar(stat="identity",
-           fill="white",
-           col="orange")+
+           fill="orange")+
   geom_line(aes(y=`média móvel`),
             col="blue")+
   scale_x_date(date_breaks = "2 month",
@@ -385,8 +384,7 @@ casosNit_final$`média móvel` <- casosNit_final$MM_ocup_Uti
 
 g8 <- casosNit_final |> ggplot(aes(x=date, y=`Leitos UTI ocupados`))+
    geom_bar(stat="identity",
-           fill="orange",
-           col="orange")+
+           fill="orange")+
   geom_line(aes(y=`média móvel`),
             col="blue")+
   scale_x_date(date_breaks = "2 month",

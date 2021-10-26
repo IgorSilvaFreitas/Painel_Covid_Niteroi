@@ -535,7 +535,7 @@ g11 <- casosNit_final |> ggplot(aes(x=date, y=`Vacinas aplicadas`))+
                date_labels = "%b/%y")+
   scale_y_continuous(label = scales::label_number(big.mark = ".",
                                                   decimal.mark = ",")) +
-  labs(title="Aplicação diária de Vacinas de 3ª Dose ou Dose Única", y= "Vacina de 3ª Dose ou Dose Única",
+  labs(title="Aplicação diária de Vacinas de 3ª Dose", y= "Vacina de 3ª Dose",
        x= "data")+ 
   theme_tufte()+
   theme(plot.title = element_text(hjust = 0.5, size=12, face="bold"),

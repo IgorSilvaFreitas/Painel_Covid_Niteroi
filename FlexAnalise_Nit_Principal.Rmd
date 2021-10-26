@@ -7,7 +7,6 @@ output:
 
 ```{r setup, include=FALSE}
 {library(flexdashboard)
-library(shiny)
 library(tidyverse)
 library(ggimage)
 library(gganimate)
@@ -29,15 +28,13 @@ library(RColorBrewer)
 library(grid)
 library(viridis)
 library(hrbrthemes)
-#devtools::install_github("fndemarqui/readCovid19")
-library(readCovid19)
 library(pracma)
 library(stringi)
 library(ggsn)
 library(magick)
 library(cowplot)
 library(plotly)
-library(sidrar)}
+}
 
 ##Para baixar dados .gz
 con <- gzcon(url(paste("https://github.com/wcota/covid19br/blob/master/cases-brazil-cities-time.csv.gz?raw=true","aa_combined-20110321.csv.gz", sep="")))
@@ -100,14 +97,9 @@ leitos <- leitos |>
 niteroi= niteroi |> 
   left_join(leitos, by="date")  
 
-#pop dos municipios do RJ 2021 (na coluna Valor)
-# municipios = get_sidra(api="/t/6579/n6/3300605,3302205,3302304,3303104,3304102,3300902,3303005,3304706,3301009,3301405,3302403,3304805,3305000,3301108,3301207,3301603,3302106,3305703,3303708,3305406,3306008,3300506,3301504,3304607,3305307,3305901,3300308,3300407,3304201,3304508,3306107,3306305,3303401,3303906,3305802,3301801,3302809,3302908,3304003,3304409,3306206,3300803,3301306,3304300,3305604,3301702,3301900,3302007,3302502,3302601,3302700,3303203,3303302,3303500,3303609,3304904,3305109,3300209,3300704,3305208,3305505,3300100,3303807,3304557,3302056,3304151,3302254,3305158,3303856,3300258,3300233,3300936,3301876,3302452,3303955,3304110,3304755,3305133,3305554,3305752,3300159,3300225,3300456,3300951,3301157,3301850,3302270,3304128,3304144,3304524,3306156,3302858/v/all/p/last%201")
-municipios <- load("municipio.RData")
 
-municipios = municipios |> 
-  rename(ibgeID= 'Município (Código)', populacao= Valor) |> 
-  arrange(ibgeID) |> 
-  select(ibgeID, populacao)
+load("municipio.rdata")
+
 
 #casosNit_final = BaseFinalRJ
 casosNit_final = niteroi
@@ -131,6 +123,8 @@ aux_data = casosNit_final |>
 
 MM_casos = matrix(NA, dim(aux_nome)[1], nrow = length(aux_data$date))
 MM_obitos = matrix(NA, ncol = dim(aux_nome)[1], nrow = length(aux_data$date))
+MM_vacina = matrix(NA, ncol=dim(aux_nome)[1], nrow = length(aux_data$date))
+MM_vacina2 = matrix(NA, ncol=dim(aux_nome)[1], nrow = length(aux_data$date))
 MM_ocup_Cli = matrix(NA, ncol=dim(aux_nome)[1], nrow = length(aux_data$date))
 MM_ocup_Uti = matrix(NA, ncol=dim(aux_nome)[1], nrow = length(aux_data$date))
 
@@ -148,6 +142,10 @@ for(i in aux_nome$city){
   
   MM_obitos[l:d,j] = movavg(base_aux$newDeaths, n = 7,type = "s")
   
+  MM_vacina[l:d,j] = movavg(base_aux$D1, n=7, type="s")
+  
+  MM_vacina2[l:d,j] = movavg(base_aux$D2, n=7, type="s")
+  
   MM_ocup_Cli[l:d,j] = movavg(base_aux$ocupacaoConfirmadoCli, n=7, type="s")
   
   MM_ocup_Uti[l:d,j] = movavg(base_aux$ocupacaoConfirmadoUti, n=7, type="s")
@@ -157,6 +155,8 @@ for(i in aux_nome$city){
 
 colnames(MM_casos) = aux_nome$city
 colnames(MM_obitos) = aux_nome$city
+colnames(MM_vacina) = aux_nome$city
+colnames(MM_vacina2) = aux_nome$city
 colnames(MM_ocup_Cli) = aux_nome$city
 colnames(MM_ocup_Uti) = aux_nome$city
 
@@ -169,6 +169,16 @@ MM_aux_geral_casos = gather(MM_aux_casos, key = "city", value = "MM_casos", -dat
 MM_aux_obitos = as_tibble(MM_obitos)
 MM_aux_obitos$date = aux_data$date
 MM_aux_geral_obitos = gather(MM_aux_obitos, key = "city", value = "MM_obitos", -date)
+
+#Criando a base empilhada dos vacinados de 1 dose
+MM_aux_vacina <- as_tibble(MM_vacina)
+MM_aux_vacina$date <- aux_data$date
+MM_aux_geral_vacina <- gather(MM_aux_vacina, key = "city", value = "MM_vacina", -date)
+
+#Criando a base empilhada dos vacinados de 2 dose
+MM_aux_vacina2 <- as_tibble(MM_vacina2)
+MM_aux_vacina2$date <- aux_data$date
+MM_aux_geral_vacina2 <- gather(MM_aux_vacina2, key = "city", value = "MM_vacina2", -date)
 
 #Criando a base empilhada dos leitos clinicos ocupados
 MM_aux_ocup_Cli <- as_tibble(MM_ocup_Cli)
@@ -184,22 +194,28 @@ casosNit_final = left_join(casosNit_final,MM_aux_geral_casos, by = c("date", "ci
 
 casosNit_final = left_join(casosNit_final,MM_aux_geral_obitos, by = c("date", "city"))
 
+casosNit_final = left_join(casosNit_final,MM_aux_geral_vacina, by = c("date", "city"))
+
+casosNit_final = left_join(casosNit_final,MM_aux_geral_vacina2, by = c("date", "city"))
+
 casosNit_final = left_join(casosNit_final,MM_aux_geral_ocup_Cli, by = c("date", "city"))
 
 casosNit_final = left_join(casosNit_final,MM_aux_geral_ocup_Uti, by = c("date", "city"))
 
-###########################################################################################
+
+#save(casosNit_final, file="casosNit_final.rdata")
+
+##################################################################################################
 #SRAG20
 #Mudar a data todas as segundas
 temp <- tempfile()
 
-data_sis <- format(Sys.Date()-7, "%d-%m-%Y")
+#data_sis <- format(Sys.Date()-7, "%d-%m-%Y")
 
 download.file(url = "https://s3-sa-east-1.amazonaws.com/ckan.saude.gov.br/SRAG/2020/INFLUD-18-10-2021.csv",
               destfile = temp)
 
 srag20 <- readr::read_csv2(temp)
-#save(srag20, file="srag20.rdata")
 
 #idade
 for (i in 1:length(srag20$NU_IDADE_N)){
@@ -211,18 +227,19 @@ srag20$DT_ENTUTI= as.Date.character(srag20$DT_ENTUTI, tryFormats= "%d/%m/%Y")
 srag20$DT_SAIDUTI= as.Date.character(srag20$DT_SAIDUTI, tryFormats= "%d/%m/%Y")
 srag20$DT_EVOLUCA= as.Date.character(srag20$DT_EVOLUCA, tryFormats= "%d/%m/%Y")
 
+#save(srag20, file="srag20.rdata")
+
 ##################################################################################################
 #SRAG21
 #Mudar a data todas as segundas
 temp <- tempfile()
 
-data_sis <- format(Sys.Date()-7, "%d-%m-%Y")
+#data_sis <- format(Sys.Date()-7, "%d-%m-%Y")
 
 download.file(url = "https://s3-sa-east-1.amazonaws.com/ckan.saude.gov.br/SRAG/2021/INFLUD21-18-10-2021.csv",
               destfile = temp)
 
 srag21 <- readr::read_csv2(temp)
-#save(srag21, file="srag21.rdata")
 
 #idade
 for (i in 1:length(srag21$NU_IDADE_N)){
@@ -233,6 +250,8 @@ srag21$DT_INTERNA= as.Date.character(srag21$DT_INTERNA, tryFormats= "%d/%m/%Y")
 srag21$DT_ENTUTI= as.Date.character(srag21$DT_ENTUTI, tryFormats= "%d/%m/%Y")
 srag21$DT_SAIDUTI= as.Date.character(srag21$DT_SAIDUTI, tryFormats= "%d/%m/%Y")
 srag21$DT_EVOLUCA= as.Date.character(srag21$DT_EVOLUCA, tryFormats= "%d/%m/%Y")
+
+#save(srag21, file="srag21.rdata")
 
 ########################################################################################
 srag20 = srag20 |> 
@@ -265,7 +284,6 @@ image = image_fill(image_read("logo_get_uff_covid.png"),"none")
 raster = as.raster(image)
 image2 = image_fill(image_read("doses.png"),"none")
 doses = as.raster(image2)
-doses2 = readPNG("doses2.png")
 
 ```
 
@@ -280,8 +298,9 @@ column {data-width=500, .tabset}
 ```{r}
 casosNit_final$`Média móvel` <- round(casosNit_final$MM_casos,0)
 casosNit_final$`Casos novos` <- casosNit_final$newCases
+casosNit_final$Data <- casosNit_final$date
 
-g1 <- casosNit_final |> ggplot(aes(x=date, y=`Casos novos`))+ 
+g1 <- casosNit_final |> ggplot(aes(x=Data, y=`Casos novos`))+ 
   geom_bar(stat="identity",
            fill="orange")+
   geom_line(aes(y=`Média móvel`),
@@ -316,7 +335,7 @@ ggplotly(g1) |>
 casosNit_final$`Média móvel` <- round(casosNit_final$MM_obitos,0)
 casosNit_final$`Óbitos novos` <- casosNit_final$newDeaths
 
-g2 <- casosNit_final |> ggplot(aes(x=date, y=`Óbitos novos`))+ 
+g2 <- casosNit_final |> ggplot(aes(x=Data, y=`Óbitos novos`))+ 
   geom_bar(stat="identity",
            fill="orange")+
   geom_line(aes(y=`Média móvel`),
@@ -351,9 +370,10 @@ ggplotly(g2) |>
 casosNit_final$`Leitos clínicos ocupados` <- casosNit_final$ocupacaoConfirmadoCli
 casosNit_final$`média móvel` <- casosNit_final$MM_ocup_Cli
 
-g7 <- casosNit_final |> ggplot(aes(x=date, y=`Leitos clínicos ocupados`))+ 
+g7 <- casosNit_final |> ggplot(aes(x=Data, y=`Leitos clínicos ocupados`))+ 
   geom_bar(stat="identity",
-           fill="orange")+
+           fill="white",
+           col="orange")+
   geom_line(aes(y=`média móvel`),
             col="blue")+
   scale_x_date(date_breaks = "2 month",
@@ -384,9 +404,10 @@ ggplotly(g7) |>
 casosNit_final$`Leitos UTI ocupados` <- casosNit_final$ocupacaoConfirmadoUti
 casosNit_final$`média móvel` <- casosNit_final$MM_ocup_Uti
 
-g8 <- casosNit_final |> ggplot(aes(x=date, y=`Leitos UTI ocupados`))+
+g8 <- casosNit_final |> ggplot(aes(x=Data, y=`Leitos UTI ocupados`))+
    geom_bar(stat="identity",
-           fill="orange")+
+           fill="orange",
+           col="orange")+
   geom_line(aes(y=`média móvel`),
             col="blue")+
   scale_x_date(date_breaks = "2 month",
@@ -420,7 +441,7 @@ column {data-width=500, .tabset}
 casosNit_final$`Primeira dose` <- casosNit_final$D1
 casosNit_final$`Segunda dose ou dose única` <- casosNit_final$D2 + casosNit_final$DU
 
-g3 <- casosNit_final |> ggplot(aes(x=date, y=`Primeira dose`))+ 
+g3 <- casosNit_final |> ggplot(aes(x=Data, y=`Primeira dose`))+ 
   geom_bar(stat="identity",
            fill="orange")+
   geom_bar(mapping= aes(y=`Segunda dose ou dose única`),
@@ -462,7 +483,7 @@ ggplotly(g3) |>
 ```{r}
 casosNit_final$`Vacinas aplicadas` <- casosNit_final$D1
 
-g4 <- casosNit_final |> ggplot(aes(x=date, y=`Vacinas aplicadas`))+ 
+g4 <- casosNit_final |> ggplot(aes(x=Data, y=`Vacinas aplicadas`))+ 
   geom_bar(stat="identity",
            fill="red")+
   scale_x_date(date_breaks = "month",
@@ -495,7 +516,7 @@ ggplotly(g4) |>
 ```{r}
 casosNit_final$`Vacinas aplicadas` <- casosNit_final$D2 + casosNit_final$DU
 
-g5 <- casosNit_final |> ggplot(aes(x=date, y=`Vacinas aplicadas`))+ 
+g5 <- casosNit_final |> ggplot(aes(x=Data, y=`Vacinas aplicadas`))+ 
   geom_bar(stat="identity",
            fill="blue")+
   scale_x_date(date_breaks = "month",
@@ -523,12 +544,12 @@ ggplotly(g5) |>
 ```
 
 
-### Vacinação diária da 3ª dose
+### Vacinação diária da 3° dose
 
 ```{r}
 casosNit_final$`Vacinas aplicadas` <- casosNit_final$D3
 
-g11 <- casosNit_final |> ggplot(aes(x=date, y=`Vacinas aplicadas`))+ 
+g11 <- casosNit_final |> ggplot(aes(x=Data, y=`Vacinas aplicadas`))+ 
   geom_bar(stat="identity",
            fill="green")+
   scale_x_date(date_breaks = "month",
@@ -585,9 +606,7 @@ g9 =  ggplot(srag_cli) +
   coord_flip() + 
   scale_fill_manual(name = "", values = c("darkred", "steelblue")) +
   labs(x = "", y = "Ocupações de SRAG por COVID-19 Confirmados (%)", fill= "Ano", title= "Leitos Clínicos") + 
-  theme_light()+
-  theme(plot.title = element_text(hjust = 0.5, size=12, face="bold"),
-        text = element_text(size=15))
+  theme_light()
 
 ggplotly(g9, tooltip = "text") |> 
    layout(images = list(
@@ -632,9 +651,7 @@ g10 =  ggplot(srag_uti) +
   coord_flip() + 
   scale_fill_manual(name = "", values = c("darkred", "steelblue")) +
   labs(x = "", y = "Ocupações de SRAG por COVID-19 Confirmados (%)", fill= "Ano", title= "Leitos de UTI") + 
-  theme_light()+
-  theme(plot.title = element_text(hjust = 0.5, size=12, face="bold"),
-        text = element_text(size=15))
+  theme_light()
 
 ggplotly(g10, tooltip = "text") |> 
   layout(images = list(
@@ -745,7 +762,7 @@ casosNit_final2$`Aplicações segunda dose ou dose única` <- casosNit_final2$D2
 casosNit_final2$`Aplicações terceira dose` <- casosNit_final2$D3_AC
 
 g6 <- casosNit_final2 |> 
-  ggplot(aes(x=date, y=`Aplicações primeira dose`, fill = "Primeira dose"))+ 
+  ggplot(aes(x=Data, y=`Aplicações primeira dose`, fill = "Primeira dose"))+ 
   geom_line(col= "red")+
   geom_line(aes(y= `Aplicações segunda dose ou dose única`, fill = "Segunda dose ou dose única"),
             col="blue")+
@@ -783,7 +800,7 @@ Mapas
 column {data-width=1000, .tabset}
 -----------------------------------------------------------------------
 
-### Mapa da proporção da população vacinada com a 1ª dose
+### Mapa da proporção da população vacinada com a 1° dose
 
 ```{r fig.align='center', echo=FALSE, message=FALSE, warning=FALSE, fig.width = 10}
 #Mapa Primeira Dose
@@ -845,7 +862,7 @@ tm_shape(Nit) +
 
 ```
 
-### Mapa da proporção da população vacinada com a 2ª dose ou dose única
+### Mapa da proporção da população vacinada com a 2° dose ou dose única
 
 ```{r fig.align='center', echo=FALSE, message=FALSE, warning=FALSE, fig.width = 10}
 #Mapa Segunda Dose/ Dose Única
@@ -923,7 +940,7 @@ tm_shape(Nit) +
 
 ```
 
-### Mapa da proporção da população vacinada com a 3ª dose
+### Mapa da proporção da população vacinada com a 3° dose
 
 ```{r fig.align='center', echo=FALSE, message=FALSE, warning=FALSE, fig.width = 10}
 #Mapa Terceira Dose

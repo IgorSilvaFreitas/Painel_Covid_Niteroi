@@ -195,7 +195,7 @@ temp <- tempfile()
 
 data_sis <- format(Sys.Date()-7, "%d-%m-%Y")
 
-download.file(url = "https://s3-sa-east-1.amazonaws.com/ckan.saude.gov.br/SRAG/2020/INFLUD-11-10-2021.csv",
+download.file(url = "https://s3-sa-east-1.amazonaws.com/ckan.saude.gov.br/SRAG/2020/INFLUD-18-10-2021.csv",
               destfile = temp)
 
 srag20 <- readr::read_csv2(temp)
@@ -218,7 +218,7 @@ temp <- tempfile()
 
 data_sis <- format(Sys.Date()-7, "%d-%m-%Y")
 
-download.file(url = "https://s3-sa-east-1.amazonaws.com/ckan.saude.gov.br/SRAG/2021/INFLUD21-11-10-2021.csv",
+download.file(url = "https://s3-sa-east-1.amazonaws.com/ckan.saude.gov.br/SRAG/2021/INFLUD21-18-10-2021.csv",
               destfile = temp)
 
 srag21 <- readr::read_csv2(temp)
@@ -523,7 +523,7 @@ ggplotly(g5) |>
 ```
 
 
-### Vacinação diária da 3° dose
+### Vacinação diária da 3ª dose
 
 ```{r}
 casosNit_final$`Vacinas aplicadas` <- casosNit_final$D3
@@ -783,7 +783,7 @@ Mapas
 column {data-width=1000, .tabset}
 -----------------------------------------------------------------------
 
-### Mapa da proporção da população vacinada com a 1° dose
+### Mapa da proporção da população vacinada com a 1ª dose
 
 ```{r fig.align='center', echo=FALSE, message=FALSE, warning=FALSE, fig.width = 10}
 #Mapa Primeira Dose
@@ -845,7 +845,7 @@ tm_shape(Nit) +
 
 ```
 
-### Mapa da proporção da população vacinada com a 2° dose ou dose única
+### Mapa da proporção da população vacinada com a 2ª dose ou dose única
 
 ```{r fig.align='center', echo=FALSE, message=FALSE, warning=FALSE, fig.width = 10}
 #Mapa Segunda Dose/ Dose Única
@@ -923,7 +923,7 @@ tm_shape(Nit) +
 
 ```
 
-### Mapa da proporção da população vacinada com a 3° dose
+### Mapa da proporção da população vacinada com a 3ª dose
 
 ```{r fig.align='center', echo=FALSE, message=FALSE, warning=FALSE, fig.width = 10}
 #Mapa Terceira Dose

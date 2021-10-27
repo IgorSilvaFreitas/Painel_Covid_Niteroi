@@ -101,24 +101,24 @@ niteroi= niteroi |>
 load("municipio.rdata")
 
 
-#casosNit_final = BaseFinalRJ
-casosNit_final = niteroi
+#Nit_Total = BaseFinalRJ
+Nit_Total = niteroi
 
 
-#table(casosNit_final$Municipios)
-casosNit_final <- casosNit_final |> dplyr::filter(ibgeID!=33)
+#table(Nit_Total$Municipios)
+Nit_Total <- Nit_Total |> dplyr::filter(ibgeID!=33)
 municipios |> dplyr::rename(ibeID=populacao)
 municipios$ibgeID <- as.numeric(municipios$ibgeID)
-casosNit_final <- left_join(casosNit_final, municipios, by="ibgeID")
+Nit_Total <- left_join(Nit_Total, municipios, by="ibgeID")
 
-aux_semana <- casosNit_final |> 
+aux_semana <- Nit_Total |> 
   dplyr::distinct(epi_week)
 
-aux_nome <- casosNit_final |> 
+aux_nome <- Nit_Total |> 
   dplyr::distinct(city)
 
-casosNit_final$date <- ymd(casosNit_final$date)
-aux_data = casosNit_final |> 
+Nit_Total$date <- ymd(Nit_Total$date)
+aux_data = Nit_Total |> 
   distinct(date)
 
 MM_casos = matrix(NA, dim(aux_nome)[1], nrow = length(aux_data$date))
@@ -131,7 +131,7 @@ MM_ocup_Uti = matrix(NA, ncol=dim(aux_nome)[1], nrow = length(aux_data$date))
 
 j = 1
 for(i in aux_nome$city){
-  base_aux = casosNit_final  |>
+  base_aux = Nit_Total  |>
     filter(city == i) |> 
     arrange(date) |>
     distinct(city, date, .keep_all = T)
@@ -190,20 +190,20 @@ MM_aux_ocup_Uti <- as_tibble(MM_ocup_Uti)
 MM_aux_ocup_Uti$date <- aux_data$date
 MM_aux_geral_ocup_Uti <- gather(MM_aux_ocup_Uti, key = "city", value = "MM_ocup_Uti", -date)
 
-casosNit_final = left_join(casosNit_final,MM_aux_geral_casos, by = c("date", "city"))
+Nit_Total = left_join(Nit_Total,MM_aux_geral_casos, by = c("date", "city"))
 
-casosNit_final = left_join(casosNit_final,MM_aux_geral_obitos, by = c("date", "city"))
+Nit_Total = left_join(Nit_Total,MM_aux_geral_obitos, by = c("date", "city"))
 
-casosNit_final = left_join(casosNit_final,MM_aux_geral_vacina, by = c("date", "city"))
+Nit_Total = left_join(Nit_Total,MM_aux_geral_vacina, by = c("date", "city"))
 
-casosNit_final = left_join(casosNit_final,MM_aux_geral_vacina2, by = c("date", "city"))
+Nit_Total = left_join(Nit_Total,MM_aux_geral_vacina2, by = c("date", "city"))
 
-casosNit_final = left_join(casosNit_final,MM_aux_geral_ocup_Cli, by = c("date", "city"))
+Nit_Total = left_join(Nit_Total,MM_aux_geral_ocup_Cli, by = c("date", "city"))
 
-casosNit_final = left_join(casosNit_final,MM_aux_geral_ocup_Uti, by = c("date", "city"))
+Nit_Total = left_join(Nit_Total,MM_aux_geral_ocup_Uti, by = c("date", "city"))
 
 
-#save(casosNit_final, file="casosNit_final.rdata")
+#save(Nit_Total, file="Nit_Total.rdata")
 
 ##################################################################################################
 #SRAG20
@@ -296,11 +296,11 @@ column {data-width=500, .tabset}
 ### Casos diários
 
 ```{r}
-casosNit_final$`Média móvel` <- round(casosNit_final$MM_casos,0)
-casosNit_final$`Casos novos` <- casosNit_final$newCases
-casosNit_final$Data <- casosNit_final$date
+Nit_Total$`Média móvel` <- round(Nit_Total$MM_casos,0)
+Nit_Total$`Casos novos` <- Nit_Total$newCases
+Nit_Total$Data <- Nit_Total$date
 
-g1 <- casosNit_final |> ggplot(aes(x=Data, y=`Casos novos`))+ 
+g1 <- Nit_Total |> ggplot(aes(x=Data, y=`Casos novos`))+ 
   geom_bar(stat="identity",
            fill="orange")+
   geom_line(aes(y=`Média móvel`),
@@ -332,10 +332,10 @@ ggplotly(g1) |>
 ### Óbitos diários
 
 ```{r}
-casosNit_final$`Média móvel` <- round(casosNit_final$MM_obitos,0)
-casosNit_final$`Óbitos novos` <- casosNit_final$newDeaths
+Nit_Total$`Média móvel` <- round(Nit_Total$MM_obitos,0)
+Nit_Total$`Óbitos novos` <- Nit_Total$newDeaths
 
-g2 <- casosNit_final |> ggplot(aes(x=Data, y=`Óbitos novos`))+ 
+g2 <- Nit_Total |> ggplot(aes(x=Data, y=`Óbitos novos`))+ 
   geom_bar(stat="identity",
            fill="orange")+
   geom_line(aes(y=`Média móvel`),
@@ -367,10 +367,10 @@ ggplotly(g2) |>
 ### Ocupação diária de leitos clínicos
 
 ```{r}
-casosNit_final$`Leitos clínicos ocupados` <- casosNit_final$ocupacaoConfirmadoCli
-casosNit_final$`média móvel` <- casosNit_final$MM_ocup_Cli
+Nit_Total$`Leitos clínicos ocupados` <- Nit_Total$ocupacaoConfirmadoCli
+Nit_Total$`média móvel` <- Nit_Total$MM_ocup_Cli
 
-g7 <- casosNit_final |> ggplot(aes(x=Data, y=`Leitos clínicos ocupados`))+ 
+g7 <- Nit_Total |> ggplot(aes(x=Data, y=`Leitos clínicos ocupados`))+ 
   geom_bar(stat="identity",
            fill="white",
            col="orange")+
@@ -401,10 +401,10 @@ ggplotly(g7) |>
 ### Ocupação diária de leitos de UTI
 
 ```{r}
-casosNit_final$`Leitos UTI ocupados` <- casosNit_final$ocupacaoConfirmadoUti
-casosNit_final$`média móvel` <- casosNit_final$MM_ocup_Uti
+Nit_Total$`Leitos UTI ocupados` <- Nit_Total$ocupacaoConfirmadoUti
+Nit_Total$`média móvel` <- Nit_Total$MM_ocup_Uti
 
-g8 <- casosNit_final |> ggplot(aes(x=Data, y=`Leitos UTI ocupados`))+
+g8 <- Nit_Total |> ggplot(aes(x=Data, y=`Leitos UTI ocupados`))+
    geom_bar(stat="identity",
            fill="orange",
            col="orange")+
@@ -438,10 +438,10 @@ column {data-width=500, .tabset}
 ### Vacinação diária
 
 ```{r}
-casosNit_final$`Primeira dose` <- casosNit_final$D1
-casosNit_final$`Segunda dose ou dose única` <- casosNit_final$D2 + casosNit_final$DU
+Nit_Total$`Primeira dose` <- Nit_Total$D1
+Nit_Total$`Segunda dose ou dose única` <- Nit_Total$D2 + Nit_Total$DU
 
-g3 <- casosNit_final |> ggplot(aes(x=Data, y=`Primeira dose`))+ 
+g3 <- Nit_Total |> ggplot(aes(x=Data, y=`Primeira dose`))+ 
   geom_bar(stat="identity",
            fill="orange")+
   geom_bar(mapping= aes(y=`Segunda dose ou dose única`),
@@ -481,9 +481,9 @@ ggplotly(g3) |>
 ### Vacinação diária da 1ª dose
 
 ```{r}
-casosNit_final$`Vacinas aplicadas` <- casosNit_final$D1
+Nit_Total$`Vacinas aplicadas` <- Nit_Total$D1
 
-g4 <- casosNit_final |> ggplot(aes(x=Data, y=`Vacinas aplicadas`))+ 
+g4 <- Nit_Total |> ggplot(aes(x=Data, y=`Vacinas aplicadas`))+ 
   geom_bar(stat="identity",
            fill="red")+
   scale_x_date(date_breaks = "month",
@@ -514,9 +514,9 @@ ggplotly(g4) |>
 ### Vacinação diária da 2ª dose ou Dose Única
 
 ```{r}
-casosNit_final$`Vacinas aplicadas` <- casosNit_final$D2 + casosNit_final$DU
+Nit_Total$`Vacinas aplicadas` <- Nit_Total$D2 + Nit_Total$DU
 
-g5 <- casosNit_final |> ggplot(aes(x=Data, y=`Vacinas aplicadas`))+ 
+g5 <- Nit_Total |> ggplot(aes(x=Data, y=`Vacinas aplicadas`))+ 
   geom_bar(stat="identity",
            fill="blue")+
   scale_x_date(date_breaks = "month",
@@ -544,12 +544,12 @@ ggplotly(g5) |>
 ```
 
 
-### Vacinação diária da 3° dose
+### Vacinação diária da 3ª dose
 
 ```{r}
-casosNit_final$`Vacinas aplicadas` <- casosNit_final$D3
+Nit_Total$`Vacinas aplicadas` <- Nit_Total$D3
 
-g11 <- casosNit_final |> ggplot(aes(x=Data, y=`Vacinas aplicadas`))+ 
+g11 <- Nit_Total |> ggplot(aes(x=Data, y=`Vacinas aplicadas`))+ 
   geom_bar(stat="identity",
            fill="green")+
   scale_x_date(date_breaks = "month",
@@ -677,29 +677,29 @@ column {data-width=200}
   
 ```{r fig.align='center', echo=FALSE, message=FALSE, warning=FALSE, fig.width = 10}
 #Acumulado das vacinas aplicadas
-casosNit_final2= casosNit_final
-casosNit_final2$D1= as.character(casosNit_final2$D1)
-for (i in 1:length(casosNit_final2$D1)){
-  if(is.na(casosNit_final2$D1[i]==T)) casosNit_final2$D1[i]="Nao informado"
+Nit_Vacina= Nit_Total
+Nit_Vacina$D1= as.character(Nit_Vacina$D1)
+for (i in 1:length(Nit_Vacina$D1)){
+  if(is.na(Nit_Vacina$D1[i]==T)) Nit_Vacina$D1[i]="Nao informado"
 }
-casosNit_final2= dplyr::filter(casosNit_final2, D1!="Nao informado")
-casosNit_final2$D1= as.numeric(casosNit_final2$D1)
+Nit_Vacina= dplyr::filter(Nit_Vacina, D1!="Nao informado")
+Nit_Vacina$D1= as.numeric(Nit_Vacina$D1)
 
-casosNit_final2$D1_AC= cumsum(casosNit_final2$D1)
-casosNit_final2$D2_AC= cumsum(casosNit_final2$D2+casosNit_final2$DU)
-casosNit_final2$D3_AC= cumsum(casosNit_final2$D3)
+Nit_Vacina$D1_AC= cumsum(Nit_Vacina$D1)
+Nit_Vacina$D2_AC= cumsum(Nit_Vacina$D2+Nit_Vacina$DU)
+Nit_Vacina$D3_AC= cumsum(Nit_Vacina$D3)
 
-casosNit_final2$D2_AC= as.character(casosNit_final2$D2_AC)
-for (i in 1:length(casosNit_final2$D2_AC)){
-  if((casosNit_final2$date[i]<"2021-02-10")) casosNit_final2$D2_AC[i]=NA
+Nit_Vacina$D2_AC= as.character(Nit_Vacina$D2_AC)
+for (i in 1:length(Nit_Vacina$D2_AC)){
+  if((Nit_Vacina$date[i]<"2021-02-10")) Nit_Vacina$D2_AC[i]=NA
 }
-casosNit_final2$D2_AC= as.numeric(casosNit_final2$D2_AC)
+Nit_Vacina$D2_AC= as.numeric(Nit_Vacina$D2_AC)
 
-casosNit_final2$D3_AC= as.character(casosNit_final2$D3_AC)
-for (i in 1:length(casosNit_final2$D3_AC)){
-  if((casosNit_final2$date[i]<"2021-08-27")) casosNit_final2$D3_AC[i]=NA
+Nit_Vacina$D3_AC= as.character(Nit_Vacina$D3_AC)
+for (i in 1:length(Nit_Vacina$D3_AC)){
+  if((Nit_Vacina$date[i]<"2021-08-27")) Nit_Vacina$D3_AC[i]=NA
 }
-casosNit_final2$D3_AC= as.numeric(casosNit_final2$D3_AC)
+Nit_Vacina$D3_AC= as.numeric(Nit_Vacina$D3_AC)
 
 
 Nit_map <- get_brmap(geo = "City",
@@ -707,7 +707,7 @@ Nit_map <- get_brmap(geo = "City",
                      class = "sf")
 Nit_map = filter(Nit_map,nome=="NITERÓI")
 
-BaseNit_aux = casosNit_final2
+BaseNit_aux = Nit_Vacina
 BaseNit_aux$city = sub(pattern = "/RJ", replacement = "", x = BaseNit_aux$city)
 BaseNit_aux$city = str_to_upper(BaseNit_aux$city)
 #aux_inconsistencia = str_to_upper(aux_inconsistencia)
@@ -757,11 +757,11 @@ column {data-width=800}
 ### Vacinação acumulada por tipo de dose
 
 ```{r }
-casosNit_final2$`Aplicações primeira dose` <- casosNit_final2$D1_AC
-casosNit_final2$`Aplicações segunda dose ou dose única` <- casosNit_final2$D2_AC
-casosNit_final2$`Aplicações terceira dose` <- casosNit_final2$D3_AC
+Nit_Vacina$`Aplicações primeira dose` <- Nit_Vacina$D1_AC
+Nit_Vacina$`Aplicações segunda dose ou dose única` <- Nit_Vacina$D2_AC
+Nit_Vacina$`Aplicações terceira dose` <- Nit_Vacina$D3_AC
 
-g6 <- casosNit_final2 |> 
+g6 <- Nit_Vacina |> 
   ggplot(aes(x=Data, y=`Aplicações primeira dose`, fill = "Primeira dose"))+ 
   geom_line(col= "red")+
   geom_line(aes(y= `Aplicações segunda dose ou dose única`, fill = "Segunda dose ou dose única"),
@@ -800,7 +800,7 @@ Mapas
 column {data-width=1000, .tabset}
 -----------------------------------------------------------------------
 
-### Mapa da proporção da população vacinada com a 1° dose
+### Mapa da proporção da população vacinada com a 1ª dose
 
 ```{r fig.align='center', echo=FALSE, message=FALSE, warning=FALSE, fig.width = 10}
 #Mapa Primeira Dose
@@ -862,7 +862,7 @@ tm_shape(Nit) +
 
 ```
 
-### Mapa da proporção da população vacinada com a 2° dose ou dose única
+### Mapa da proporção da população vacinada com a 2ª dose ou dose única
 
 ```{r fig.align='center', echo=FALSE, message=FALSE, warning=FALSE, fig.width = 10}
 #Mapa Segunda Dose/ Dose Única
@@ -871,7 +871,7 @@ Nit_map <- get_brmap(geo = "City",
                      class = "sf")
 Nit_map = filter(Nit_map,nome=="NITERÓI")
 
-BaseNit_aux = casosNit_final2
+BaseNit_aux = Nit_Vacina
 BaseNit_aux$city = sub(pattern = "/RJ", replacement = "", x = BaseNit_aux$city)
 BaseNit_aux$city = str_to_upper(BaseNit_aux$city)
 #aux_inconsistencia = str_to_upper(aux_inconsistencia)
@@ -940,7 +940,7 @@ tm_shape(Nit) +
 
 ```
 
-### Mapa da proporção da população vacinada com a 3° dose
+### Mapa da proporção da população vacinada com a 3ª dose
 
 ```{r fig.align='center', echo=FALSE, message=FALSE, warning=FALSE, fig.width = 10}
 #Mapa Terceira Dose
@@ -949,7 +949,7 @@ Nit_map <- get_brmap(geo = "City",
                      class = "sf")
 Nit_map = filter(Nit_map,nome=="NITERÓI")
 
-BaseNit_aux = casosNit_final2
+BaseNit_aux = Nit_Vacina
 BaseNit_aux$city = sub(pattern = "/RJ", replacement = "", x = BaseNit_aux$city)
 BaseNit_aux$city = str_to_upper(BaseNit_aux$city)
 #aux_inconsistencia = str_to_upper(aux_inconsistencia)
